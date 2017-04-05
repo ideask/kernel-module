@@ -1,5 +1,5 @@
 KVER = $(shell uname -r)
-obj-m :=test.o
+obj-m :=module_a.o
 
 kernel_modules:
 	make -C /lib/modules/$(KVER)/build M=$(PWD) modules

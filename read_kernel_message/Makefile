@@ -1,8 +1,8 @@
-EXE = read_kernel
-OBJ = read_kernel.o
-SRC = read_kernel.c
+EXE = read
+OBJ = read.o
+SRC = read.c
 
-CC = gcc
+CC = arm-none-linux-gnueabi-gcc
 
 CFLAGS = 
 LDFLAGS = 

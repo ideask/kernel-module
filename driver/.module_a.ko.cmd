@@ -1,0 +1,1 @@
+cmd_/workspace/module/module/driver/module_a.ko := ld -r -m elf_x86_64 -T ./scripts/module-common.lds --build-id  -o /workspace/module/module/driver/module_a.ko /workspace/module/module/driver/module_a.o /workspace/module/module/driver/module_a.mod.o
