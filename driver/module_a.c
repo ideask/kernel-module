@@ -4,6 +4,10 @@
 #include <linux/cdev.h>
 #include <linux/device.h>
 #include <asm/uaccess.h>
+#include <linux/spinlock.h>
+#include <linux/init.h>
+#include <linux/list.h>
+
 #define MAX_LENGTH 64
 static int major = 232;
 static int minor = 0;
@@ -19,6 +23,14 @@ static char module_a_buffer[MAX_LENGTH]={0};
 struct cdev *module_a;
 static dev_t devno;
 static struct class *module_a_class;
+spinlock_t spinlock;
+
+struct module_select
+{
+  char *string;
+  void(*module_fun)();
+};
+
 
 #define DEVICE_NAME "module_a"
 struct file_operations module_a_fops ={
@@ -58,6 +70,8 @@ static ssize_t module_a_read(struct file *filp,char *buf,size_t count, loff_t * 
 }
 static ssize_t module_a_write (struct file *filp,const char *buf,size_t count,loff_t *f_pos)
 {
+        unsigned long flags = 0;
+	spin_lock_irqsave(&spinlock,flags);
 	if(count > MAX_LENGTH)
 	{
 		printk("Max length is %d",MAX_LENGTH);
@@ -66,8 +80,10 @@ static ssize_t module_a_write (struct file *filp,const char *buf,size_t count,lo
 	if(copy_from_user(&module_a_buffer, buf, count))
 	{
 		printk("copy_from_user error \n");
+                spin_unlock_irqrestore(&spinlock,flags);
 		return -EFAULT;
 	}
+        spin_unlock_irqrestore(&spinlock,flags);
 	return count;
 }
 
@@ -115,6 +131,8 @@ static int __init module_a_udev_init(void)
 		return -1;
 	}
 	device_create(module_a_class,NULL,devno,NULL,DEVICE_NAME);
+        spin_lock_init(&spinlock);
+        printk("module_a has inserted!\n");
 	return 0;
 error:
 	unregister_chrdev_region(devno,1);
@@ -127,6 +145,7 @@ static void __exit module_a_udev_exit(void)
 	class_destroy(module_a_class);
 	cdev_del(module_a);
 	unregister_chrdev_region(devno,1);
+        printk("module_a has removed!\n");
 }
 module_init(module_a_udev_init);
 module_exit(module_a_udev_exit);
