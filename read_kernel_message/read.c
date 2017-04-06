@@ -1,22 +1,53 @@
 #include <stdio.h>
-#include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
 #include <sys/klog.h>
-char buffer[1024]={0};
-int main()
+#include <string.h>
+  
+
+
+int main(void)
 {
-    char* delim="\n";//分隔符字符串
-    char* p=0;//第一次调用strtok
-    char* end=0;
-    int count =1;
-    klogctl(2,buffer,1024);
-    end = strrchr(buffer,'\n');
-    printf("weibu:%s\n",end);
-    p=strtok(buffer,delim);
-    while(p!=NULL){//当返回值不为NULL时，继续循环
-        printf("{%d}:%s\n",count,p);//输出分解的字符串
-	printf("<END>\n");
-        p=strtok(NULL,delim);//继续调用strtok，分解剩下的字符串
-	count++;
+char *buffer = NULL;
+int klog_buf_len = 0;
+int count = 0;
+size_t len =0;
+ssize_t read_count = 0;
+int buffer_len = 0; 
+char delims[] = "\n";  
+char *result = NULL; 
+
+   while(1)
+    {
+      klog_buf_len = klogctl(10,0,0);
+      buffer = (char *)malloc(klog_buf_len + 1);
+      if(!buffer)
+      {
+        perror("malloc\n");
+        exit(-1);
+      }
+      count = klogctl(4,buffer,klog_buf_len);
+      if(count < 0)
+      {
+        perror("klogctl read clean\n");
+        exit(-1);
+      }
+      buffer[count] = '\0';
+      buffer_len = strlen(buffer);
+      if(buffer_len != 0)
+      { 
+         result = strtok(buffer,delims);
+         while(result != NULL)
+         {
+            printf("<Start>\n");
+            printf("%s\n",result);
+            printf("<End>\n");
+            result = strtok(NULL, delims);
+         }
+      }
+      free(buffer);
     }
-    return 0;
+ 
+
+  return 0;
 }

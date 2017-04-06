@@ -2,8 +2,8 @@ EXE = read
 OBJ = read.o
 SRC = read.c
 
-CC = arm-none-linux-gnueabi-gcc
-
+#CC = arm-none-linux-gnueabi-gcc
+CC = gcc
 CFLAGS = 
 LDFLAGS = 
 
