@@ -52,7 +52,7 @@ void module_a_add_list(char *string, void(*module_fun)(void))//增加节点函�
     tmp_node->string = string;
     tmp_node->module_fun = module_fun;
     list_add_tail(&(tmp_node->list),&(module_select_head.list));
-    printk("Module_a:Node string: %s added!\n",string);	
+//    printk("Module_a:Node string: %s added!\n",string);	
 }
 
 void module_a_remove_list(char *string, void(*module_fun)(void))//删除节点函数
@@ -64,7 +64,7 @@ void module_a_remove_list(char *string, void(*module_fun)(void))//删除节点�
       tmp_select = list_entry(pos, struct module_select, list);
       if((tmp_select->string) == string)//是否匹配
       {
-        printk("Found the string is:%s Then delete it!\n",tmp_select->string);
+//        printk("Found the string is:%s Then delete it!\n",tmp_select->string);
         list_del(pos);//删除匹配特征字符串的链表节点
         kfree(tmp_select);//释放该数据节点所占内存    
       }
@@ -109,18 +109,33 @@ static ssize_t module_a_read(struct file *filp,char *buf,size_t count, loff_t * 
 static ssize_t module_a_write (struct file *filp,const char *buf,size_t count,loff_t *f_pos)
 {
     unsigned long flags = 0;
-    spin_lock_irqsave(&spinlock,flags);
-    if(count > MAX_LENGTH)
+    char *get_line_string = NULL;//行输入保存的指针
+    struct list_head *pos;//定义一个节点指针
+    struct module_select *tmp_select;//定义一个module_select结构体指针变量
+    spin_lock_irqsave(&spinlock,flags);//自旋锁开始
+    get_line_string = (char *)kmalloc(count+1, GFP_KERNEL);//+1增加结束符的空间
+    get_line_string[count]='\0';//补回字符串结束符，因为送进内核的字符不包含结束符
+/*    if(count > MAX_LENGTH)
     {
 	printk("Max length is %d",MAX_LENGTH);
 	count = MAX_LENGTH;
-    }
-    if(copy_from_user(&module_a_buffer, buf, count))
+    }*/
+    if(copy_from_user(get_line_string, buf, count))
     {
 	printk("copy_from_user error \n");
         spin_unlock_irqrestore(&spinlock,flags);
 	return -EFAULT;
     }
+    
+    list_for_each(pos, &module_select_head.list)
+    {
+       tmp_select = list_entry(pos, struct module_select, list);
+       if(strstr(get_line_string,(tmp_select->string)) != NULL)//发现特征字符串
+       {
+	   (*(tmp_select->module_fun))();
+       }
+    }
+    
     spin_unlock_irqrestore(&spinlock,flags); 
     return count;
 }
