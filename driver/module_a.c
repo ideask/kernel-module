@@ -74,105 +74,104 @@ void module_a_remove_list(char *string, void(*module_fun)(void))//删除节点�
 
 static int module_a_open(struct inode *inode,struct file *file)
 {
-	struct list_head *pos;//定义一个节点指针
-	struct module_select *tmp_select;//定义一个module_select结构体指针变量
-	try_module_get(THIS_MODULE);
-        list_for_each(pos, &module_select_head.list)
-        {
-         tmp_select = list_entry(pos, struct module_select, list);
-         printk("module_a list is :%s\n",tmp_select->string);
-        }
-
-	return 0;
+    struct list_head *pos;//定义一个节点指针
+    struct module_select *tmp_select;//定义一个module_select结构体指针变量
+    try_module_get(THIS_MODULE);
+    list_for_each(pos, &module_select_head.list)
+    {
+       tmp_select = list_entry(pos, struct module_select, list);
+       printk("module_a list is :%s\n",tmp_select->string);
+    }
+    return 0;
 }
 static int module_a_release(struct inode *inode,struct file *file)
 {
-	module_put(THIS_MODULE);
-	return 0;
+    module_put(THIS_MODULE);
+    return 0;
 }
 
 
 static ssize_t module_a_read(struct file *filp,char *buf,size_t count, loff_t * f_pos)
 {
-	if(count > MAX_LENGTH)
-	{
-		printk("Max length is %d",MAX_LENGTH);
-		count = MAX_LENGTH;
-	}
-	if(copy_to_user((void *)buf, module_a_buffer, count))
-	{
-		printk("copy_to_user error \n");
-		return -EFAULT;
-	}
+    if(count > MAX_LENGTH)
+    {
+	printk("Max length is %d",MAX_LENGTH);
+	count = MAX_LENGTH;
+    }
+    if(copy_to_user((void *)buf, module_a_buffer, count))
+    {
+	printk("copy_to_user error \n");
+	return -EFAULT;
+    }
 	return count;
 
 }
 static ssize_t module_a_write (struct file *filp,const char *buf,size_t count,loff_t *f_pos)
 {
-        unsigned long flags = 0;
-	spin_lock_irqsave(&spinlock,flags);
-	if(count > MAX_LENGTH)
-	{
-		printk("Max length is %d",MAX_LENGTH);
-		count = MAX_LENGTH;
-	}
-	if(copy_from_user(&module_a_buffer, buf, count))
-	{
-		printk("copy_from_user error \n");
-                spin_unlock_irqrestore(&spinlock,flags);
-		return -EFAULT;
-	}
+    unsigned long flags = 0;
+    spin_lock_irqsave(&spinlock,flags);
+    if(count > MAX_LENGTH)
+    {
+	printk("Max length is %d",MAX_LENGTH);
+	count = MAX_LENGTH;
+    }
+    if(copy_from_user(&module_a_buffer, buf, count))
+    {
+	printk("copy_from_user error \n");
         spin_unlock_irqrestore(&spinlock,flags);
-	return count;
+	return -EFAULT;
+    }
+    spin_unlock_irqrestore(&spinlock,flags); 
+    return count;
 }
 
 
 
 static int __init module_a_udev_init(void)
 {
-	int ret;
-	if(major > 0)
+    int ret;
+    if(major > 0)
+    {
+	devno = MKDEV(major,minor);
+	ret = register_chrdev_region(devno,1,DEVICE_NAME);
+    }
+    else
+    {
+	ret = alloc_chrdev_region(&devno,minor,1,DEVICE_NAME);
+	major = MAJOR(devno);
+    }
+    if(ret < 0)
+    {
+	printk(KERN_ERR "cannot get major %d\n",major);
+	return -1;
+    }
+    module_a = cdev_alloc();
+    if(module_a != NULL)
+    {
+       cdev_init(module_a,&module_a_fops);
+       module_a->owner = THIS_MODULE;
+       if(cdev_add(module_a,devno,1)!= 0)
 	{
-		devno = MKDEV(major,minor);
-		ret = register_chrdev_region(devno,1,DEVICE_NAME);
+	   printk(KERN_ERR"add module_a cdev error!\n");
+	   goto error;
 	}
-	else
-	{
-		ret = alloc_chrdev_region(&devno,minor,1,DEVICE_NAME);
-		major = MAJOR(devno);
-	}
-	if(ret < 0)
-	{
-		printk(KERN_ERR "cannot get major %d\n",major);
-		return -1;
-	}
-	module_a = cdev_alloc();
-	if(module_a != NULL)
-	{
-		cdev_init(module_a,&module_a_fops);
-		module_a->owner = THIS_MODULE;
-		if(cdev_add(module_a,devno,1)!= 0)
-		{
-			printk(KERN_ERR"add module_a cdev error!\n");
-			goto error;
-		}
-	}
-	else
-	{
-		printk(KERN_ERR"module_a alloc error!\n");
-		return -1;
-	}
+   }
+   else
+   {
+        printk(KERN_ERR"module_a alloc error!\n");
+	return -1;
+   }
 	
-	module_a_class = class_create(THIS_MODULE,"module_a_class");
-	if(IS_ERR(module_a_class))
-	{
-		printk(KERN_INFO"create module_a_class error \n");
-		return -1;
-	}
-	device_create(module_a_class,NULL,devno,NULL,DEVICE_NAME);//创建设备节点
-        spin_lock_init(&spinlock);//初始化自旋锁
-        INIT_LIST_HEAD(&module_select_head.list);//初始化链表头 完成双向循环链表的创建
-	return 0;
+    module_a_class = class_create(THIS_MODULE,"module_a_class");
+    if(IS_ERR(module_a_class))
+    {
+	printk(KERN_INFO"create module_a_class error \n");
+	return -1;
+    }
+    device_create(module_a_class,NULL,devno,NULL,DEVICE_NAME);//创建设备节点
+    spin_lock_init(&spinlock);//初始化自旋锁
+    INIT_LIST_HEAD(&module_select_head.list);//初始化链表头 完成双向循环链表的创建 
+    return 0;
 error:
 	unregister_chrdev_region(devno,1);
 	return ret;
@@ -180,15 +179,25 @@ error:
 
 static void __exit module_a_udev_exit(void)
 {
-        device_destroy(module_a_class,devno);
-	class_destroy(module_a_class);
-	cdev_del(module_a);
-	unregister_chrdev_region(devno,1);
+    struct list_head *pos,*n;
+    struct module_select *p;
+    device_destroy(module_a_class,devno);
+    class_destroy(module_a_class);
+    cdev_del(module_a);
+    unregister_chrdev_region(devno,1);
+    list_for_each_safe(pos, n, &module_select_head.list)
+    {
+      list_del(pos);
+      p = list_entry(pos, struct module_select,list);
+      kfree(p);
+    }
+    printk("Module_a:the line nodes are all clean!\nModule_a removed!\n");
+  	
 }
 EXPORT_SYMBOL(module_a_add_list);//添加节点
 EXPORT_SYMBOL(module_a_remove_list);//删除节点
 module_init(module_a_udev_init);
 module_exit(module_a_udev_exit);
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("ideask,ideask@ideask.cf");
+MODULE_AUTHOR("ideask");
 
