@@ -12,10 +12,8 @@
 int main(void)
 {
   char *buffer = NULL;
-  int klog_buf_len = 0;
-  int count = 0;
-  size_t len =0;
-  ssize_t read_count = 0;
+  int klog_buf_len = 0;//klogctl(10,0,0)读出buff缓冲大小
+  int count = 0;//klogctl(4,,)读出并清除的字符长度
   int buffer_len = 0; 
   char delims[] = "\n";  
   char *result = NULL; 
@@ -35,13 +33,14 @@ int main(void)
       if(!buffer)
       {
         perror("malloc\n");
-        exit(-1);
+        exit(1);
       }
       count = klogctl(4,buffer,klog_buf_len);//读取buff后清空buff，避免读取重复内容
       if(count < 0)
       {
         perror("klogctl read clean\n");
-        exit(-1);
+        free(buffer);
+        exit(1);
       }
       buffer[count] = '\0';//补上字符串结束符号
       buffer_len = strlen(buffer);
@@ -57,6 +56,7 @@ int main(void)
            if(!ret)
            {
              perror("write \"DEV_NAME\"error\n");
+	     free(buffer);
              exit(1);
            }
             result = strtok(NULL, delims);//继续分割字符串，直到遇到'\0'字符串结束符为止

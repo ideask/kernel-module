@@ -8,17 +8,14 @@
 #include <linux/init.h>
 #include <linux/list.h>
 #include <linux/slab.h>
-#define MAX_LENGTH 64
 static int major = 232;
 static int minor = 0;
 module_param(major,int,S_IRUGO);
 module_param(minor,int,S_IRUGO);
 
 static int module_a_open(struct inode *inode,struct file *file);
-static ssize_t module_a_read(struct file *filp,char *buf,size_t count, loff_t * f_pos);
 static ssize_t module_a_write (struct file *filp,const char *buf,size_t count,loff_t *ppos);
 static int module_a_release(struct inode *inode,struct file *file);
-static char module_a_buffer[MAX_LENGTH]={0};
 
 struct cdev *module_a;
 static dev_t devno;
@@ -40,7 +37,6 @@ struct file_operations module_a_fops ={
 	.owner = THIS_MODULE,
 	.open = module_a_open,
 	.release = module_a_release,
-	.read = module_a_read,
 	.write = module_a_write
 };
 
@@ -91,39 +87,23 @@ static int module_a_release(struct inode *inode,struct file *file)
 }
 
 
-static ssize_t module_a_read(struct file *filp,char *buf,size_t count, loff_t * f_pos)
-{
-    if(count > MAX_LENGTH)
-    {
-	printk("Max length is %d",MAX_LENGTH);
-	count = MAX_LENGTH;
-    }
-    if(copy_to_user((void *)buf, module_a_buffer, count))
-    {
-	printk("copy_to_user error \n");
-	return -EFAULT;
-    }
-	return count;
-
-}
 static ssize_t module_a_write (struct file *filp,const char *buf,size_t count,loff_t *f_pos)
 {
     unsigned long flags = 0;
+    int ret = 0;
     char *get_line_string = NULL;//行输入保存的指针
     struct list_head *pos;//定义一个节点指针
     struct module_select *tmp_select;//定义一个module_select结构体指针变量
-    spin_lock_irqsave(&spinlock,flags);//自旋锁开始
     get_line_string = (char *)kmalloc(count+1, GFP_KERNEL);//+1增加结束符的空间
     get_line_string[count]='\0';//补回字符串结束符，因为送进内核的字符不包含结束符
-/*    if(count > MAX_LENGTH)
-    {
-	printk("Max length is %d",MAX_LENGTH);
-	count = MAX_LENGTH;
-    }*/
-    if(copy_from_user(get_line_string, buf, count))
+    
+    spin_lock_irqsave(&spinlock,flags);//自旋锁开始
+    ret = copy_from_user(get_line_string, buf, count);//临界数据区
+    spin_unlock_irqrestore(&spinlock,flags);//自旋锁结束
+    
+    if(ret)
     {
 	printk("copy_from_user error \n");
-        spin_unlock_irqrestore(&spinlock,flags);
 	return -EFAULT;
     }
     
@@ -136,7 +116,6 @@ static ssize_t module_a_write (struct file *filp,const char *buf,size_t count,lo
        }
     }
     
-    spin_unlock_irqrestore(&spinlock,flags); 
     return count;
 }
 
@@ -200,7 +179,7 @@ static void __exit module_a_udev_exit(void)
     class_destroy(module_a_class);
     cdev_del(module_a);
     unregister_chrdev_region(devno,1);
-    list_for_each_safe(pos, n, &module_select_head.list)
+    list_for_each_safe(pos, n, &module_select_head.list)//遍历并清除链表节点，释放内存空间
     {
       list_del(pos);
       p = list_entry(pos, struct module_select,list);
