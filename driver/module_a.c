@@ -59,19 +59,19 @@ void module_a_remove_list(char *string, void(*module_fun)(void))//删除节点�
 {
     struct list_head *pos, *n;//定义一个节点指针
     struct module_select *tmp_select;//定义一个module_select结构体指针变量
+
+    mutex_lock(&module_a_mutex);//加锁
     list_for_each_safe(pos, n, &module_select_head.list)
     {
       tmp_select = list_entry(pos, struct module_select, list);
       if((tmp_select->string) == string)//是否匹配
       {
 //        printk("Found the string is:%s Then delete it!\n",tmp_select->string);
-       
-        mutex_lock(&module_a_mutex);//加锁
         list_del(pos);//删除匹配特征字符串的链表节点
         kfree(tmp_select);//释放该数据节点所占内存    
-        mutex_unlock(&module_a_mutex);//解锁
       }
     }
+    mutex_unlock(&module_a_mutex);//解锁
 }
 
 
