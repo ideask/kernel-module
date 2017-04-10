@@ -4,7 +4,8 @@
 #include <linux/cdev.h>
 #include <linux/device.h>
 #include <asm/uaccess.h>
-#include <linux/spinlock.h>
+//#include <linux/spinlock.h>
+#include <linux/mutex.h>
 #include <linux/init.h>
 #include <linux/list.h>
 #include <linux/slab.h>
@@ -20,7 +21,8 @@ static int module_a_release(struct inode *inode,struct file *file);
 struct cdev *module_a;
 static dev_t devno;
 static struct class *module_a_class;
-spinlock_t spinlock;
+//spinlock_t spinlock;//初始化自旋锁
+struct mutex module_a_mutex;//初始化互斥锁
 
 struct module_select
 {
@@ -47,7 +49,9 @@ void module_a_add_list(char *string, void(*module_fun)(void))//增加节点函�
     tmp_node = (struct module_select *)kmalloc(sizeof(struct module_select), GFP_KERNEL);
     tmp_node->string = string;
     tmp_node->module_fun = module_fun;
+    mutex_lock(&module_a_mutex);//加锁
     list_add_tail(&(tmp_node->list),&(module_select_head.list));
+    mutex_unlock(&module_a_mutex);//解锁
 //    printk("Module_a:Node string: %s added!\n",string);	
 }
 
@@ -61,8 +65,11 @@ void module_a_remove_list(char *string, void(*module_fun)(void))//删除节点�
       if((tmp_select->string) == string)//是否匹配
       {
 //        printk("Found the string is:%s Then delete it!\n",tmp_select->string);
+       
+        mutex_lock(&module_a_mutex);//加锁
         list_del(pos);//删除匹配特征字符串的链表节点
         kfree(tmp_select);//释放该数据节点所占内存    
+        mutex_unlock(&module_a_mutex);//解锁
       }
     }
 }
@@ -89,7 +96,6 @@ static int module_a_release(struct inode *inode,struct file *file)
 
 static ssize_t module_a_write (struct file *filp,const char *buf,size_t count,loff_t *f_pos)
 {
-    unsigned long flags = 0;
     int ret = 0;
     char *get_line_string = NULL;//行输入保存的指针
     struct list_head *pos;//定义一个节点指针
@@ -97,16 +103,16 @@ static ssize_t module_a_write (struct file *filp,const char *buf,size_t count,lo
     get_line_string = (char *)kmalloc(count+1, GFP_KERNEL);//+1增加结束符的空间
     get_line_string[count]='\0';//补回字符串结束符，因为送进内核的字符不包含结束符
     
-    spin_lock_irqsave(&spinlock,flags);//自旋锁开始
+  //  spin_lock_irqsave(&spinlock,flags);//自旋锁开始
     ret = copy_from_user(get_line_string, buf, count);//临界数据区
-    spin_unlock_irqrestore(&spinlock,flags);//自旋锁结束
+   // spin_unlock_irqrestore(&spinlock,flags);//自旋锁结束
     
     if(ret)
     {
 	printk("copy_from_user error \n");
 	return -EFAULT;
     }
-    
+    mutex_lock(&module_a_mutex);//加锁
     list_for_each(pos, &module_select_head.list)
     {
        tmp_select = list_entry(pos, struct module_select, list);
@@ -115,6 +121,7 @@ static ssize_t module_a_write (struct file *filp,const char *buf,size_t count,lo
 	   (*(tmp_select->module_fun))();
        }
     }
+    mutex_unlock(&module_a_mutex);//解锁
     
     return count;
 }
@@ -163,7 +170,8 @@ static int __init module_a_udev_init(void)
 	return -1;
     }
     device_create(module_a_class,NULL,devno,NULL,DEVICE_NAME);//创建设备节点
-    spin_lock_init(&spinlock);//初始化自旋锁
+//    spin_lock_init(&spinlock);//初始化自旋锁
+    mutex_init(&module_a_mutex);//初始化互斥锁
     INIT_LIST_HEAD(&module_select_head.list);//初始化链表头 完成双向循环链表的创建 
     return 0;
 error:
